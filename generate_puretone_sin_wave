@@ -1,0 +1,20 @@
+import numpy as np
+from scipy.io.wavfile import write
+
+# Parameters for the pure sine wave
+fs = 48000  # Sampling rate (48 kHz)
+duration = 10 * 60  # Total duration (10 minutes)
+frequency = 20000  # Frequency of the pure sine wave (20 kHz)
+
+# Generate the pure sine wave signal
+t = np.linspace(0, duration, int(fs * duration), endpoint=False)
+pure_sine_wave = np.sin(2 * np.pi * frequency * t)
+
+# Normalize the signal to 16-bit PCM format
+pure_sine_wave_int16 = np.int16(pure_sine_wave / np.max(np.abs(pure_sine_wave)) * 32767)
+
+# Save the pure sine wave as a .wav file
+filename = "C:/Users/leapuser/PycharmProjects/leap_project/1_generate_acoustic_signal/acoustic_signal_wav_files_to_play_while_recording/pure_sine_wave_20kHz.wav"
+write(filename, fs, pure_sine_wave_int16)
+
+print(f"10-minute 20 kHz pure sine wave saved to {filename}")
