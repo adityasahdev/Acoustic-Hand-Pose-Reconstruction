@@ -1,0 +1,431 @@
+import pandas as pd
+import cv2
+import numpy as np
+import tensorflow as tf
+from markdown.extensions.extra import extensions
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score, mean_absolute_percentage_error
+import matplotlib.pyplot as plt
+import math
+from matplotlib.animation import FuncAnimation , FFMpegWriter , PillowWriter
+import os
+import joblib
+from scipy.io import wavfile
+from tqdm import tqdm
+
+
+def trial_model(dataset,model_file,norm_params_file):
+
+
+    columns_to_drop = []
+    for i in dataset.columns:
+        if '33' in i or '34' in i or '35' in i:
+            columns_to_drop.append(i)
+    # print(dataset.head())
+    dataset = dataset.drop(columns_to_drop, axis=1)
+    # print(dataset.head())
+    dataset = dataset.dropna()
+    X_columns_name = [col for col in dataset.columns if
+                      col.startswith("channel") and not col.endswith('33') and not col.endswith(
+                          '34') and not col.endswith('35')]
+
+    Y_columns_names = [col for col in dataset.columns if
+                       col not in X_columns_name and col != 'frame_id' and not col.endswith('33') and not col.endswith(
+                           '34') and not col.endswith('35') and col != 'Unnamed: 0']
+
+    X_df = dataset[X_columns_name]
+    Y_df = dataset[Y_columns_names]
+    print(X_df)
+    print(Y_df)
+    X_np = np.array(X_df)
+    Y_np1 = np.array(Y_df)
+    print(X_np.shape)
+    print(Y_np1.shape)
+    X_np = (X_np - np.min(X_np, axis=0)) / (np.max(X_np, axis=0) - np.min(X_np, axis=0))  # [0,1]
+
+    Y_np = (Y_np1 - np.min(Y_np1, axis=0)) / (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0))  # [0,1]
+
+    joblib.dump({'Y_min': np.min(Y_np1, axis=0), 'Y_max': np.max(Y_np1, axis=0)}, norm_params_file)
+
+
+    train_X, test_X, train_Y, test_Y = train_test_split(X_np, Y_np, test_size=0.2)
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Dense(512, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(256, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(200, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(150, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.Dense(units=len(Y_columns_names) * 7),
+        tf.keras.layers.LeakyReLU(),
+        tf.keras.layers.Dense(units=len(Y_columns_names), activation='linear')
+    ])
+    # Compile the model
+    model.compile(optimizer=tf.keras.optimizers.Adamax(learning_rate=0.001),
+                  loss=tf.keras.losses.Huber(),
+                  metrics=[tf.keras.metrics.MeanSquaredError()])
+    history = model.fit(train_X, train_Y, epochs=200, verbose=1, validation_data=(test_X, test_Y))
+    # model_file = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Evaluation\\merges_dataset.keras'
+
+    model.save(model_file)
+    model = tf.keras.models.load_model(model_file)
+
+    predictions = model.predict(test_X)
+    mae = mean_absolute_error(test_Y, predictions)
+    mse = mean_squared_error(test_Y, predictions)
+    Y_np_denormalized = Y_np * (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0)) + np.min(Y_np1, axis=0)
+    min_values = Y_np_denormalized.min(axis=0)  # Min values for each channel
+    max_values = Y_np_denormalized.max(axis=0)
+    denormalized_mae_per_channel = mae * (max_values - min_values)
+    MAE = np.mean(denormalized_mae_per_channel)
+    r2 = r2_score(test_Y, predictions)
+    mse = mse * ((max_values - min_values) ** 2)
+    mse = np.mean(mse)
+    rmse = 'xxx'
+    print(f"MAE(denormalised): {MAE}, MSE: {mse}, RMSE: {rmse}, 'R²': {r2}")
+    return MAE,mse
+
+def loss_model(dataset,model_file,norm_params_file,loss_plot_file):
+   
+    columns_to_drop = []
+    for i in dataset.columns:
+        if '33' in i or '34' in i or '35' in i:
+            columns_to_drop.append(i)
+    # print(dataset.head())
+    dataset = dataset.drop(columns_to_drop, axis=1)
+    # print(dataset.head())
+    dataset = dataset.dropna()
+    X_columns_name = [col for col in dataset.columns if
+                      col.startswith("channel") and not col.endswith('33') and not col.endswith(
+                          '34') and not col.endswith('35')]
+
+    Y_columns_names = [col for col in dataset.columns if
+                       col not in X_columns_name and col != 'frame_id' and not col.endswith('33') and not col.endswith(
+                           '34') and not col.endswith('35') and col != 'Unnamed: 0']
+
+    X_df = dataset[X_columns_name]
+    Y_df = dataset[Y_columns_names]
+    print(X_df)
+    print(Y_df)
+    X_np = np.array(X_df)
+    Y_np1 = np.array(Y_df)
+    print(X_np.shape)
+    print(Y_np1.shape)
+    X_np = (X_np - np.min(X_np, axis=0)) / (np.max(X_np, axis=0) - np.min(X_np, axis=0))  # [0,1]
+
+    Y_np = (Y_np1 - np.min(Y_np1, axis=0)) / (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0))  # [0,1]
+
+    joblib.dump({'Y_min': np.min(Y_np1, axis=0), 'Y_max': np.max(Y_np1, axis=0)}, norm_params_file)
+
+
+    train_X, test_X, train_Y, test_Y = train_test_split(X_np, Y_np, test_size=0.2)
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Dense(512, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(256, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(200, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(150, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.Dense(units=len(Y_columns_names) * 7),
+        tf.keras.layers.LeakyReLU(),
+        tf.keras.layers.Dense(units=len(Y_columns_names), activation='linear')  # Linear output for regression
+    ])
+    # Compile the model
+    model.compile(optimizer=tf.keras.optimizers.Adamax(learning_rate=0.001),
+                  loss=tf.keras.losses.Huber(),
+                  metrics=[tf.keras.metrics.MeanSquaredError()])
+    history = model.fit(train_X, train_Y, epochs=200, verbose=1, validation_data=(test_X, test_Y))
+
+
+    model.save(model_file)
+    model = tf.keras.models.load_model(model_file)
+
+    predictions = model.predict(test_X)
+    mae = mean_absolute_error(test_Y, predictions)
+    mse = mean_squared_error(test_Y, predictions)
+    Y_np_denormalized = Y_np * (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0)) + np.min(Y_np1, axis=0)
+    min_values = Y_np_denormalized.min(axis=0)  # Min values for each channel
+    max_values = Y_np_denormalized.max(axis=0)
+    denormalized_mae_per_channel = mae * (max_values - min_values)
+    MAE = np.mean(denormalized_mae_per_channel)
+    r2 = r2_score(test_Y, predictions)
+    mse = mse * ((max_values - min_values) ** 2)
+    mse = np.mean(mse)
+    rmse = 'xxx'
+    print(f"MAE(denormalised): {MAE}, MSE: {mse}, RMSE: {rmse}, 'R²': {r2}")
+
+    plt.figure(figsize=(8, 5))
+    plt.plot(history.history['loss'], label='Training Loss')
+    plt.plot(history.history['val_loss'], label='Validation Loss')
+    plt.title('Model Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(loss_plot_file)
+    print(f'Loss plot saved to {loss_plot_file}')
+    plt.show()
+    return MAE,mse
+
+
+def train_full_model(dataset,model_file,norm_params_file):
+    columns_to_drop = []
+    for i in dataset.columns:
+        if '33' in i or '34' in i or '35' in i:
+            columns_to_drop.append(i)
+    # print(dataset.head())
+    dataset = dataset.drop(columns_to_drop, axis=1)
+    # print(dataset.head())
+    dataset = dataset.dropna()
+    X_columns_name = [col for col in dataset.columns if
+                      col.startswith("channel") and not col.endswith('33') and not col.endswith(
+                          '34') and not col.endswith('35')]
+
+    Y_columns_names = [col for col in dataset.columns if
+                       col not in X_columns_name and col != 'frame_id' and not col.endswith('33') and not col.endswith(
+                           '34') and not col.endswith('35') and col != 'Unnamed: 0']
+
+    X_df = dataset[X_columns_name]
+    Y_df = dataset[Y_columns_names]
+    print(X_df)
+    print(Y_df)
+    X_np = np.array(X_df)
+    Y_np1 = np.array(Y_df)
+    print(X_np.shape)
+    print(Y_np1.shape)
+    X_np = (X_np - np.min(X_np, axis=0)) / (np.max(X_np, axis=0) - np.min(X_np, axis=0))  # [0,1]
+
+    Y_np = (Y_np1 - np.min(Y_np1, axis=0)) / (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0))  # [0,1]
+
+    joblib.dump({'Y_min': np.min(Y_np1, axis=0), 'Y_max': np.max(Y_np1, axis=0)}, norm_params_file)
+
+
+
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Dense(512, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(256, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(200, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(150, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.0001)),
+        tf.keras.layers.Dense(units=len(Y_columns_names) * 7),
+        tf.keras.layers.LeakyReLU(),
+        tf.keras.layers.Dense(units=len(Y_columns_names), activation='linear')  # Linear output for regression
+    ])
+    # Compile the model
+    model.compile(optimizer=tf.keras.optimizers.Adamax(learning_rate=0.001),
+                  loss=tf.keras.losses.Huber(),
+                  metrics=[tf.keras.metrics.MeanSquaredError()])
+    history = model.fit(X_np, Y_np, epochs=200, verbose=1)
+    # model_file = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Evaluation\\merges_dataset.keras'
+    print('Saving Model... ')
+    model.save(model_file)
+    model = tf.keras.models.load_model(model_file)
+    print('MODEL SAVED')
+
+
+    
+def train_model(dataset,model_file,norm_params_file): #dataset is read as csv file and model_file is model file path
+    # Define input features (frequency channels)
+
+    columns_to_drop = []
+    for i in dataset.columns:
+        if '33' in i or '34' in i or '35' in i:
+            columns_to_drop.append(i)
+    #print(dataset.head())
+    dataset = dataset.drop(columns_to_drop,axis = 1)
+    #print(dataset.head())
+    dataset = dataset.dropna()
+    X_columns_name = [col for col in dataset.columns if col.startswith("channel") and not col.endswith('33') and not col.endswith('34') and not col.endswith('35')]
+
+
+    Y_columns_names = [col for col in dataset.columns if
+                       col not in X_columns_name and col != 'frame_id' and not col.endswith('33') and not col.endswith('34') and not col.endswith('35') and col != 'Unnamed: 0']
+
+    X_df = dataset[X_columns_name]
+    Y_df = dataset[Y_columns_names]
+    print(X_df)
+    print(Y_df)
+    X_np = np.array(X_df)
+    Y_np1 = np.array(Y_df)
+    print(X_np.shape)
+    print(Y_np1.shape)
+    X_np = (X_np - np.min(X_np, axis=0)) / (np.max(X_np, axis=0) - np.min(X_np, axis=0))  # [0,1]
+
+    Y_np = (Y_np1 - np.min(Y_np1, axis=0)) / (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0))  # [0,1]
+
+    joblib.dump({'Y_min': np.min(Y_np1, axis=0), 'Y_max': np.max(Y_np1, axis=0)}, norm_params_file)
+
+    # Train-test split 80% train and 20% for test
+    train_X, test_X, train_Y, test_Y = train_test_split(X_np, Y_np, test_size=0.2)
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Dense(512, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(256, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(200, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+        tf.keras.layers.BatchNormalization(),
+        tf.keras.layers.Dropout(0.2),
+        tf.keras.layers.Dense(150, activation=tf.nn.relu, kernel_regularizer=tf.keras.regularizers.l2(0.001)),
+
+        tf.keras.layers.Dense(units=len(Y_columns_names) * 7, activation=tf.nn.leaky_relu),
+        tf.keras.layers.Dense(units=len(Y_columns_names), activation='linear')  
+    ])
+    # Compile the model
+    model.compile(optimizer=tf.keras.optimizers.Adamax(learning_rate=0.001),
+                  loss=tf.keras.losses.Huber(),
+                  metrics=[tf.keras.metrics.MeanSquaredError()])
+    history = model.fit(train_X, train_Y, epochs=200, verbose=1, validation_data=(test_X, test_Y))
+
+
+    model.save(model_file)
+    model = tf.keras.models.load_model(model_file)
+
+    predictions = model.predict(test_X)
+    mae = mean_absolute_error(test_Y, predictions)
+    mse = mean_squared_error(test_Y, predictions)
+    Y_np_denormalized = Y_np * (np.max(Y_np1, axis=0) - np.min(Y_np1, axis=0)) + np.min(Y_np1, axis=0)
+    min_values = Y_np_denormalized.min(axis=0)  
+    max_values = Y_np_denormalized.max(axis=0)
+    denormalized_mae_per_channel = mae * (max_values - min_values)
+    MAE = np.mean(denormalized_mae_per_channel)
+    r2 = r2_score(test_Y, predictions)
+    mse = mse * ((max_values - min_values)**2)
+    mse = np.mean(mse)
+    rmse = 'xxx'
+    print(f"MAE(denormalised): {MAE}, MSE: {mse}, RMSE: {rmse}, 'R²': {r2}")
+    return MAE,test_X,Y_df, mse , r2
+    
+def give_mae(model_file,dataset,norm_params_file):
+    model = tf.keras.models.load_model(model_file)
+    columns_to_drop = []
+    for i in dataset.columns:
+        if '33' in i or '34' in i or '35' in i:
+            columns_to_drop.append(i)
+
+    dataset = dataset.drop(columns_to_drop, axis=1)
+
+    dataset = dataset.dropna()
+    X_columns_name = [col for col in dataset.columns if
+                      col.startswith("channel") and not col.endswith('33') and not col.endswith(
+                          '34') and not col.endswith('35')]
+
+    Y_columns_names = [col for col in dataset.columns if
+                       col not in X_columns_name and col != 'frame_id' and not col.endswith('33') and not col.endswith(
+                           '34') and not col.endswith('35') and col != 'Unnamed: 0']
+
+    X_df = dataset[X_columns_name]
+    Y_df = dataset[Y_columns_names]
+
+    X_np = np.array(X_df)
+    Y_np1 = np.array(Y_df)
+
+    norm_params = joblib.load(norm_params_file)
+    Y_min, Y_max = norm_params['Y_min'], norm_params['Y_max']
+
+    X_np = (X_np - np.min(X_np, axis=0)) / (np.max(X_np, axis=0) - np.min(X_np, axis=0))  # [0,1]
+
+    Y_np = (Y_np1 - Y_min) / (Y_max - Y_min)  # [0,1]
+
+    predictions = model.predict(X_np)
+    mae = mean_absolute_error(Y_np, predictions)
+    mse = mean_squared_error(Y_np, predictions)
+    Y_np_denormalized = Y_np * (Y_max - Y_min) + Y_min
+    min_values = Y_np_denormalized.min(axis=0)  
+    max_values = Y_np_denormalized.max(axis=0)
+    print(max(max_values),min(min_values))
+    denormalized_mae_per_channel = mae * (max_values - min_values)
+    mse = mse * ((max_values - min_values)**2)
+    MAE = np.mean(denormalized_mae_per_channel)
+    mse = np.mean(mse)
+    r2 = r2_score(Y_np, predictions)
+    #rmse = math.sqrt(mse)
+    print(f"MAE(denormalised): {MAE}, MSE: {mse}, RMSE: {'rmse'}, 'R²': {r2}")
+    return MAE,mse
+    
+def plot_figure(model_file,prediction_data,norm_params_file,new_data = False,interval = 50):
+    model = tf.keras.models.load_model(model_file)
+
+    norm_params = joblib.load(norm_params_file)
+    Y_min, Y_max = norm_params['Y_min'], norm_params['Y_max']
+
+    if new_data == True:
+        columns_to_drop = prediction_data.filter(regex=r'(33|34|35)$').columns
+        dataset = prediction_data.drop(columns_to_drop, errors='ignore')
+        dataset = dataset.dropna()
+
+        X_columns_name = [col for col in dataset.columns if
+                          col.startswith("channel") and not col.endswith('33') and not col.endswith(
+                              '34') and not col.endswith('35')]
+
+        X_df = dataset[X_columns_name]
+        X_np = np.array(X_df)
+        prediction_data = (X_np - np.min(X_np, axis=0)) / (np.max(X_np, axis=0) - np.min(X_np, axis=0))  #
+
+    predictions = model.predict(prediction_data)
+
+
+    predicted_hand_pose = predictions * (Y_max - Y_min) + Y_min
+    predicted_landmarks = predicted_hand_pose.reshape(-1, 84, 3)
+
+
+
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
+
+
+    ax.set_xlim([np.min(predicted_landmarks[:, :, 0]), np.max(predicted_landmarks[:, :, 0])])
+    ax.set_ylim([np.min(predicted_landmarks[:, :, 1]), np.max(predicted_landmarks[:, :, 1])])
+    ax.set_zlim([np.min(predicted_landmarks[:, :, 2]), np.max(predicted_landmarks[:, :, 2])])
+
+  
+    scatter = ax.scatter([], [], [], s=20, c='blue')
+
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+
+
+    frame_idx = 0
+
+
+    def update(frame):
+        global frame_idx
+        frame_idx = frame
+
+        if frame < len(predicted_landmarks):
+    
+            scatter._offsets3d = (predicted_landmarks[frame, :, 0],
+                                  predicted_landmarks[frame, :, 1],
+                                  predicted_landmarks[frame, :, 2])
+
+   
+        ax.set_title(f"Frame {frame + 1}/{predicted_landmarks.shape[0]}")
+
+        return scatter
+
+    ani = FuncAnimation(fig, update, frames=predicted_landmarks.shape[0], interval=interval, blit=False)
+
+
+
+
+    # Show the animation
+    plt.show()
+
+
+
