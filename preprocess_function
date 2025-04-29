@@ -1,0 +1,70 @@
+import pandas as pd
+import numpy as np
+from scipy.io import wavfile
+from tqdm import tqdm
+
+
+def preprocess(audio_path,leap_motion_path,output_path):
+    # File paths
+
+    '''audio_path = "C:/Users/leapuser/PycharmProjects/leap_project/data/20241114_144022.wav"'''
+    '''leap_motion_path = "C:/Users/leapuser/PycharmProjects/leap_project/data/20241114_144022.csv"'''
+    '''output_path = "C:/Users/leapuser/PycharmProjects/leap_project/processed_data/20241114_144022_tomodel.csv"'''
+
+    '#Load audio and Leap Motion data'
+    sampling_freq, audio_data = wavfile.read(audio_path)
+    leap_data_df = pd.read_csv(leap_motion_path)
+
+    '# Remove timestamp and frameid columns if they exist'
+    leap_data_df = leap_data_df.drop(columns=['timestamp', 'frame_id'], errors='ignore')
+
+    
+  
+    num_channels = 7  # 7-microphone array
+    audio_samples_per_frame = int(len(audio_data.T[0]) / len(leap_data_df))
+
+    '# Function to process a single row and perform FFT '
+    def process_row(row_index, audio_samples_per_frame, recording, num_channels, sampling_freq):
+        fft_features = []
+        for channel in range(num_channels):
+            channel_data = recording.T[channel]
+            start_idx = row_index * audio_samples_per_frame
+            end_idx = (row_index + 1) * audio_samples_per_frame
+            frame_data = channel_data[start_idx:end_idx]
+
+       
+            fft_data = np.fft.fft(frame_data)
+            freqs = np.fft.fftfreq(len(fft_data), d=1 / sampling_freq)
+
+            '# Filter for values within the 18-22 kHz range '
+            fft_focus = np.abs(fft_data[(freqs >= 18000) & (freqs <= 22000)])
+
+           
+            fft_features.extend(fft_focus)
+        return fft_features
+
+  
+    fft_results = []
+    for row_index in tqdm(range(len(leap_data_df)), desc="Processing FFT"):
+        fft_features = process_row(row_index, audio_samples_per_frame, audio_data, num_channels, sampling_freq)
+        fft_results.append(fft_features)
+
+
+    max_features_length = max(len(row) for row in fft_results)
+    for row in fft_results:
+        if len(row) < max_features_length:
+            row.extend([0] * (max_features_length - len(row)))
+
+  
+    fft_columns = [f"channel{ch}_freq_{i}" for ch in range(num_channels) for i in
+                   range(len(fft_results[0]) // num_channels)]
+
+
+    fft_data_df = pd.DataFrame(fft_results, columns=fft_columns)
+
+    '# Combine FFT and Leap Motion data '
+    combined_df = pd.concat([fft_data_df, leap_data_df], axis=1)
+
+    '# Save to CSV'
+    combined_df.to_csv(output_path, index=False)
+    print(f"Processed data saved to {output_path}")
