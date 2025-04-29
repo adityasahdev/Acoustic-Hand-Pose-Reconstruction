@@ -1,0 +1,273 @@
+import leap
+import numpy as np
+import cv2
+import sounddevice as sd
+import wave
+import threading
+import csv
+import time
+from datetime import datetime
+import os
+
+#Define Data collection filepath
+directory = "C:/Users/leapuser/PycharmProjects/leap_project/data"
+folder_name = 'participant_13_ex3'  #dataid
+att = ('_a_1')
+
+folderpath = os.path.join(directory, folder_name)
+audio_folder = os.path.join(folderpath, "audio")
+leap_folder = os.path.join(folderpath, "leap")
+
+# Create folder
+if not os.path.exists(folderpath):
+    os.makedirs(folderpath)  
+    os.makedirs(audio_folder)
+    os.makedirs(leap_folder)
+    print(f"Folder created at: {folderpath}")
+else:
+    print(f"Folder already exists at: {folderpath}")
+timestamp = datetime.now().strftime("%d_%m_%Y_%H_%M")
+timestamp = timestamp + att
+audio_filename = f"{audio_folder}/{timestamp}"
+leap_filename = f"{leap_folder}/{timestamp}"
+
+# Assign the same name for  audio and leap file
+audio_file = f"{audio_filename}.wav"
+csv_file = f"{leap_filename}.csv"
+
+
+# Audio settings
+sample_rate = 44100  # Sampling rate in Hz
+channels = 7  # Number of channels for the microphone array
+
+# Leap Tracking modes 
+_TRACKING_MODES = {
+    leap.TrackingMode.Desktop: "Desktop",
+    leap.TrackingMode.HMD: "HMD",
+    leap.TrackingMode.ScreenTop: "ScreenTop",
+}
+
+class Canvas:
+    def __init__(self):
+        self.name = "Python Gemini Visualiser"
+        self.screen_size = [500, 700]
+        self.hands_colour = (255, 255, 255)
+        self.font_colour = (0, 255, 44)
+        self.hands_format = "Skeleton"
+        self.output_image = np.zeros((self.screen_size[0], self.screen_size[1], 3), np.uint8)
+        self.tracking_mode = None
+        self.pitch = []
+        self.yaw = []
+        self.roll = []
+        self.controller = 0
+    def set_tracking_mode(self, tracking_mode):
+        self.tracking_mode = tracking_mode
+
+    def toggle_hands_format(self):
+        self.hands_format = "Dots" if self.hands_format == "Skeleton" else "Skeleton"
+        print(f"Set hands format to {self.hands_format}")
+
+    def get_joint_position(self, bone):
+        if bone:
+            return int(bone.x + (self.screen_size[1] / 2)), int(bone.z + (self.screen_size[0] / 2))
+        else:
+            return None
+   # def get_degrees(self):
+       #hand = frame.hands[0]  # Assuming one hand; use [1] for the second hand if needed.
+        # Get the pitch, yaw, and roll angles
+        #self.pitch = hand.direction.pitch  # forward/backward tilt
+        #self.yaw = hand.direction.yaw  # side-to-side turn
+        #self.roll = hand.palm_normal.roll  # roll of the hand
+
+    def render_hands(self, event, frame_id, csv_data):
+        self.output_image[:, :] = 0
+        timestamp = time.time()
+
+        cv2.putText(
+            self.output_image,
+            f"Tracking Mode: {_TRACKING_MODES[self.tracking_mode]}",
+            (10, self.screen_size[0] - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.5,
+            self.font_colour,
+            1,
+        )
+
+        if len(event.hands) == 0:
+            return
+
+        # left and right hand data for this frame
+        left_hand_data = []
+        right_hand_data = []
+
+        for hand in event.hands:
+            
+            hand_data = []
+            hand_type = "left" if hand.type == leap.HandType.Left else "right"
+
+            # Collect wrist and elbow positions
+            wrist = hand.arm.next_joint
+            elbow = hand.arm.prev_joint
+
+            # Adding wrist and elbow positions to the data list
+            hand_data.extend([
+                wrist.x, wrist.y, wrist.z,
+                elbow.x, elbow.y, elbow.z
+            ])
+
+            # Visualize wrist and elbow positions
+            wrist_pos = self.get_joint_position(wrist)
+            elbow_pos = self.get_joint_position(elbow)
+            if wrist_pos:
+                cv2.circle(self.output_image, wrist_pos, 3, self.hands_colour, -1)
+            if elbow_pos:
+                cv2.circle(self.output_image, elbow_pos, 3, self.hands_colour, -1)
+            if wrist_pos and elbow_pos:
+                cv2.line(self.output_image, wrist_pos, elbow_pos, self.hands_colour, 2)
+
+            # collecting (x, y, z) coordinates for each joint in the hand
+            for index_digit, finger_name in enumerate(["thumb", "index", "middle", "ring", "pinky"]):
+                digit = hand.digits[index_digit]
+                for index_bone, bone_name in enumerate(["metacarpal", "proximal", "intermediate", "distal"]):
+                    bone = digit.bones[index_bone]
+
+                    # Getting start and end joint positions
+                    if bone.prev_joint:
+                        hand_data.extend([bone.prev_joint.x, bone.prev_joint.y, bone.prev_joint.z])
+                        # Visualizing start joint position
+                        start_pos = self.get_joint_position(bone.prev_joint)
+                        if start_pos:
+                            cv2.circle(self.output_image, start_pos, 3, self.hands_colour, -1)
+                    else:
+                        hand_data.extend([None, None, None])
+
+                    if bone.next_joint:
+                        hand_data.extend([bone.next_joint.x, bone.next_joint.y, bone.next_joint.z])
+                        # Visualizing end joint position
+                        end_pos = self.get_joint_position(bone.next_joint)
+                        if end_pos:
+                            cv2.circle(self.output_image, end_pos, 3, self.hands_colour, -1)
+                            if start_pos:
+                                cv2.line(self.output_image, start_pos, end_pos, self.hands_colour, 2)
+                    else:
+                        hand_data.extend([None, None, None])
+
+            # Append data to the appropriate hand data list
+            if hand_type == "left":
+                left_hand_data = hand_data
+            elif hand_type == "right":
+                right_hand_data = hand_data
+
+        
+        if not left_hand_data:
+            left_hand_data = [None] * (60 + 6)  # 60 columns for fingers + 6 for wrist and elbow
+        if not right_hand_data:
+            right_hand_data = [None] * (60 + 6)  # Same for right hand
+
+        # Combine left hand, and right hand data in a single row
+        frame_data = [timestamp, frame_id] + left_hand_data + right_hand_data
+        csv_data.append(frame_data)
+
+class TrackingListener(leap.Listener):
+    def __init__(self, canvas, stop_event):
+        self.canvas = canvas
+        self.csv_data = []
+        self.frame_id = 0
+        self.stop_event = stop_event  
+
+    def on_tracking_event(self, event):
+        if self.stop_event.is_set():  
+            return
+        self.frame_id += 1
+        self.canvas.render_hands(event, self.frame_id, self.csv_data)
+
+    def save_csv(self):
+        # Define header 
+        header = ["timestamp", "frame_id"]
+
+        # Wrist and elbow header
+        for hand in ["left", "right"]:
+            header += [
+                f"{hand}_wrist_x", f"{hand}_wrist_y", f"{hand}_wrist_z",
+                f"{hand}_elbow_x", f"{hand}_elbow_y", f"{hand}_elbow_z"
+            ]
+
+        # Finger bones header
+        fingers = ["thumb", "index", "middle", "ring", "pinky"]
+        bones = ["metacarpal", "proximal", "intermediate", "distal"]
+
+        for hand in ["left", "right"]:
+            for finger_name in fingers:
+                for bone_name in bones:
+                    header += [
+                        f"{hand}_{finger_name}_{bone_name}_start_x",
+                        f"{hand}_{finger_name}_{bone_name}_start_y",
+                        f"{hand}_{finger_name}_{bone_name}_start_z",
+                        f"{hand}_{finger_name}_{bone_name}_end_x",
+                        f"{hand}_{finger_name}_{bone_name}_end_y",
+                        f"{hand}_{finger_name}_{bone_name}_end_z",
+                    ]
+
+        with open(csv_file, 'w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(header)  
+            writer.writerows(self.csv_data)
+        print("Data saved to", csv_file)
+
+def record_audio(sample_rate, channels, stop_event):
+    print("Starting audio recording...")
+    audio_data = []
+
+    with sd.InputStream(samplerate=sample_rate, channels=channels, dtype='int16') as stream:
+        while not stop_event.is_set():  
+            audio_data.append(stream.read(1024)[0])  # Collect audio in small chunks
+
+    # Save audio data to .wav file after stop event is triggered
+    print("Saving audio data...")
+    audio_data = np.concatenate(audio_data, axis=0)
+    with wave.open(audio_file, 'wb') as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(2)  # 16-bit audio
+        wf.setframerate(sample_rate)
+        wf.writeframes(audio_data.tobytes())
+    print(f"Audio saved to {audio_file}")
+
+def main():
+    canvas = Canvas()
+    stop_event = threading.Event()  # Stop event to control both recordings
+    tracking_listener = TrackingListener(canvas, stop_event)
+    connection = leap.Connection()
+    connection.add_listener(tracking_listener)
+
+
+    # Start the audio recording in a separate thread
+    audio_thread = threading.Thread(target=record_audio, args=(sample_rate, channels, stop_event))
+    audio_thread.start()
+
+    with connection.open():
+        connection.set_tracking_mode(leap.TrackingMode.Desktop)
+        canvas.set_tracking_mode(leap.TrackingMode.Desktop)
+
+        print("Recording... Press 'h' to stop and save files.")
+
+        while True:
+            # Display the Leap Motion data
+            cv2.imshow(canvas.name, canvas.output_image)
+            key = cv2.waitKey(1)
+
+            # Press 'h' to stop recording and save data
+            if key == ord("h"):
+                stop_event.set()  # Stop both audio and Leap Motion recording
+                break
+
+    # Wait for the audio thread to finish
+    audio_thread.join()
+    # Save Leap Motion data to CSV after stopping the recording
+    tracking_listener.save_csv()
+
+    # Close the OpenCV window
+    cv2.destroyAllWindows()
+    print("Recording stopped, files saved to the data directory.")
+
+if __name__ == "__main__":
+          main()
