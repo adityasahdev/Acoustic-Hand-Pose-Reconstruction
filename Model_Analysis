@@ -1,0 +1,177 @@
+from plot_all_functions import plot_figure, trial_model, train_full_model, loss_model
+from plot_all_functions import give_mae , preprocess ,visualise_leap , plot_figure ,train_model
+import os
+import pandas as pd
+model_file_ex1 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\model_full_prediction_ex1.keras'
+model_file_ex2 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\model_full_prediction_ex2.keras'
+model_file_ex3 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\model_full_prediction_ex3.keras'
+full_dataset_ex1 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\merged_dataset_11_participants_ex1.csv'
+full_dataset_ex2 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\merged_dataset_11_participants_ex2.csv'
+full_dataset_ex3 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\merged_dataset_11_participants_ex3.csv'
+job_lib_ex1 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\plotting_parameters_ex1.joblib'
+job_lib_ex2 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\plotting_parameters_ex2.joblib'
+job_lib_ex3 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\plotting_parameters_ex3.joblib'
+
+dataset = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\processed_data\\participant_11\\participant_11_ex3\\to_model_20_02_2025_16_43_a_1.csv'
+dataset = pd.read_csv(dataset)
+#give_mae(model_file,dataset)
+p12_1 = 'C:\\Users\leapuser\PycharmProjects\leap_project\processed_data\participant_12\participant_12_ex1'
+p12_2 = 'C:\\Users\leapuser\PycharmProjects\leap_project\processed_data\participant_12\participant_12_ex2'
+p12_3 = 'C:\\Users\leapuser\PycharmProjects\leap_project\processed_data\participant_12\participant_12_ex3'
+
+loss_model_file = 'C:\\Users\leapuser\PycharmProjects\leap_project\\bin data\\20241113_133223.keras'
+loss_joblib = 'C:\\Users\leapuser\PycharmProjects\leap_project\\bin data\\bin.joblib'
+loss_dataset = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\merged_dataset_11_participants_ex3.csv'
+loss_figure = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\loss figures\\fig2.png'
+file_path = 'C:\\Users\leapuser\PycharmProjects\leap_project\processed_data\participant_12\participant_12_ex3'
+p12 = 'C:\\Users\leapuser\PycharmProjects\leap_project\processed_data\participant_12\participant_12_ex3'
+joblib_file = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\plotting_parameters_ex1.joblib'
+csv_file = 'C:\\Users\leapuser\PycharmProjects\leap_project\data\participant_2\participant_2_ex3\leap\\24_01_2025_16_53_a_1.csv'
+full_dataset = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\merged_dataset_11_participants_ex1.csv'
+model_file = ''
+shape_file = 'C:\\Users\leapuser\PycharmProjects\leap_project\Final_Model\merged_dataset_11_participants_ex3.csv'
+flag1 = False #gives mae of all the files in the directory
+flag2 = False  #gives mae of raw data by preprocessing and evaluating
+flag3 = False  #concats P12 data
+flag4 = False #plots leap data
+flag5 = False #plots 3-d plot
+flag6 = False #get shape of datafile
+flag7 = False  #train entire model
+flag8 = False #train orignal vs trial model
+flag9 = False  #train test all three models
+flag10 = False #train all three full data model
+flag11 = False #loso individual prediction
+flag12 = False #loso merge prediction
+flag13 = True #train model and plot loss curves
+train_test_mae = []
+train_test_mse = []
+loso_mae_individual = []
+loso_mse_individual = []
+
+loso_mae_merge = []
+loso_mse_merge = []
+if flag1 == True:
+    if os.path.exists(file_path):
+        files = os.listdir(file_path)
+        for i in files:
+            participant = os.path.join(file_path, i)
+            print(i)
+            shp = pd.read_csv(participant)
+            print('shpe:',shp.shape)
+            #give_mae(model_file_ex3,pd.read_csv(participant),job_lib_ex3)
+
+if flag2 == True:
+    audio = 'C:\\Users\leapuser\PycharmProjects\leap_project\data\participant_13\participant_13_ex1\\audio\\10_03_2025_15_22_a_distance_10_2.wav'
+    leap = 'C:\\Users\leapuser\PycharmProjects\leap_project\data\participant_13\participant_13_ex1\leap\\10_03_2025_15_22_a_distance_10_2.csv'
+    preprocess(audio,leap,'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Evaluation\\predict_newdata.csv')
+    give_mae(model_file_ex1,pd.read_csv('C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Evaluation\\predict_newdata.csv'),job_lib_ex1)
+
+
+if flag3 == True:
+    data = []
+    for i in os.listdir(p12):
+        read = pd.read_csv(os.path.join(p12,i))
+        data.append(read)
+        if len(data) ==5:
+            print('Concating...')
+            dataset = pd.concat(data)
+            dataset.to_csv('C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\p12ex3\\concatdata.csv')
+            data = []
+
+if flag4 == True:
+    visualise_leap(csv_file)
+
+if flag5 == True:
+    plot_figure(model_file_ex3,dataset,job_lib_ex3,new_data=True,interval = 300)
+
+
+if flag6 == True:
+    read_file = pd.read_csv(shape_file)
+    print(read_file.shape)
+
+if flag7 == True:
+    trial_model(pd.read_csv(full_dataset),model_file,joblib_file)
+
+if flag8 ==True:
+    shape_file = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\Ex2\participant_2.csv'
+    model = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\merged_Data_auto.keras'
+    job = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\\norm_param1.joblib'
+    MAE,test_X,Y_df, mse , r2 = train_model(pd.read_csv(shape_file),model,job)
+    trial_model(pd.read_csv(shape_file),model,job)
+    print('OG model')
+    print('mae:',MAE,'mse:',mse)
+
+if flag9 == True:
+    print('Flag 9 activated')
+    MAE1, mse1= trial_model(pd.read_csv(full_dataset_ex1),model_file_ex1,job_lib_ex1)
+    train_test_mae.append(MAE1)
+    train_test_mse.append(mse1)
+    MAE2, mse2 = trial_model(pd.read_csv(full_dataset_ex2),model_file_ex2,job_lib_ex2)
+    train_test_mae.append(MAE2)
+    train_test_mse.append(mse2)
+    MAE3, mse3 = trial_model(pd.read_csv(full_dataset_ex3),model_file_ex3,job_lib_ex3)
+    train_test_mae.append(MAE3)
+    train_test_mse.append(mse3)
+    print('train_test_mae', train_test_mae)
+    print('train_test_mse',train_test_mse)
+
+
+if flag10 == True:
+    print('Flag 10 activated')
+    train_full_model(pd.read_csv(full_dataset_ex1),model_file_ex1,job_lib_ex1)
+    train_full_model(pd.read_csv(full_dataset_ex2),model_file_ex2,job_lib_ex2)
+    train_full_model(pd.read_csv(full_dataset_ex3),model_file_ex3,job_lib_ex3)
+    print('FULL DATA MODEL TRAINED...')
+
+if flag11 == True:
+    print('Flag 11 activated')
+    if os.path.exists(p12_1):
+        files = os.listdir(p12_1)
+        loso_mse_individual.append('exercise1')
+        loso_mae_individual.append('exercise1')
+        for i in files:
+            participant = os.path.join(p12_1, i)
+            MAE_p1,mse_p1 = give_mae(model_file_ex1,pd.read_csv(participant),job_lib_ex1)
+            loso_mae_individual.append(MAE_p1)
+            loso_mse_individual.append(mse_p1)
+    if os.path.exists(p12_2):
+        files = os.listdir(p12_2)
+        loso_mse_individual.append('exercise2')
+        loso_mae_individual.append('exercise2')
+        for i in files:
+            participant = os.path.join(p12_2, i)
+            MAE_p2,mse_p2 = give_mae(model_file_ex2,pd.read_csv(participant),job_lib_ex2)
+            loso_mae_individual.append(MAE_p2)
+            loso_mse_individual.append(mse_p2)
+    if os.path.exists(p12_3):
+        files = os.listdir(p12_3)
+        loso_mse_individual.append('exercise3')
+        loso_mae_individual.append('exercise3')
+        for i in files:
+            participant = os.path.join(p12_3,i)
+            MAE_p3,mse_p3 = give_mae(model_file_ex3,pd.read_csv(participant),job_lib_ex3)
+            loso_mae_individual.append(MAE_p3)
+            loso_mse_individual.append(mse_p3)
+    print('loso_mae_individual',loso_mae_individual)
+    print('loso_mse_individual',loso_mse_individual)
+
+if flag12 == True:
+    print('Flag 12 activated')
+    participant1 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\p12ex1\concatdata.csv'
+    mae1,mse1 = give_mae(model_file_ex1,pd.read_csv(participant1),job_lib_ex1)
+    participant2 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\p12ex2\concatdata.csv'
+    mae2,mse2 = give_mae(model_file_ex2,pd.read_csv(participant2),job_lib_ex2)
+    participant3 = 'C:\\Users\leapuser\PycharmProjects\leap_project\Evaluation\p12ex3\concatdata.csv'
+    mae3,mse3 = give_mae(model_file_ex3,pd.read_csv(participant3),job_lib_ex3)
+    loso_mae_merge.append(mae1)
+    loso_mse_merge.append(mse1)
+    loso_mae_merge.append(mae2)
+    loso_mse_merge.append(mse2)
+    loso_mae_merge.append(mae3)
+    loso_mse_merge.append(mse3)
+
+    print('loso_mae_merge',loso_mae_merge)
+    print('loso_mse_merge',loso_mse_merge)
+if flag13 == True:
+    print('Flag 13 model 1 activated')
+    loss_model(pd.read_csv(loss_dataset),loss_model_file,loss_joblib,loss_figure)
