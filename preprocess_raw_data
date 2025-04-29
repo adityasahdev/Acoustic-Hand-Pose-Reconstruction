@@ -4,7 +4,7 @@ import numpy as np
 from scipy.io import wavfile
 from tqdm import tqdm
 import matplotlib.pyplot as plt
-from preprocess_main import preprocess
+from preprocess_function import preprocess
 
 data = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\data'
 processed_data = 'C:/Users/leapuser/PycharmProjects/leap_project/processed_data'
