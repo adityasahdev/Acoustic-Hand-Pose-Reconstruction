@@ -1,0 +1,36 @@
+import os
+import pandas as pd
+import numpy as np
+from scipy.io import wavfile
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+from preprocess_main import preprocess
+
+data = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\data'
+processed_data = 'C:/Users/leapuser/PycharmProjects/leap_project/processed_data'
+
+for participant in os.listdir(data):
+    participant_file = os.path.join(data, participant)
+    participant_output_file  = os.path.join(processed_data, participant)
+    if 'participant_12' in participant:
+        if os.path.isdir(participant_file):
+            for exercise in os.listdir(participant_file):
+                exercise_file = os.path.join(participant_file, exercise)
+                output_file = os.path.join(participant_output_file, exercise)
+
+                if os.path.isdir(exercise_file):
+                    audio_path = os.path.join(exercise_file, 'audio')
+                    leap_motion_path = os.path.join(exercise_file, 'leap')
+
+                    os.makedirs(output_file,exist_ok=True)
+
+                    if os.path.exists(audio_path) and os.path.exists(leap_motion_path):
+                        audio_files = sorted(os.listdir(audio_path))
+                        leap_files = sorted(os.listdir(leap_motion_path))
+
+                        for audio_file, leap_file in zip(audio_files, leap_files):
+                            audio_file_path = os.path.join(audio_path, audio_file)
+                            leap_file_path = os.path.join(leap_motion_path, leap_file)
+
+                            output_file_path = os.path.join(output_file, f"to_model_{leap_file}")
+                            preprocess(audio_file_path, leap_file_path, output_file_path)
