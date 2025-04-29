@@ -1,4 +1,4 @@
-from plot import trial_model
+from plot_ll_functions import trial_model
 
 import pandas as pd
 import os
