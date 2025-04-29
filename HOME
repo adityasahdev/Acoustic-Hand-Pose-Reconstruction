@@ -1,0 +1,80 @@
+import streamlit as st
+import pandas as pd
+import matplotlib.pyplot as plt
+from tensorboard.plugins.audio.summary import audio
+import os
+import time
+
+from usd import streamlit_plot_fig
+from usd import preprocess , go_to_next_page , plot_fig
+
+output_path = "C:\\Users\\leapuser\\PycharmProjects\\leap_project\\.venv\\gui_saved_data\\to_model"
+model_file_ex1 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\model_full_prediction_ex1.keras'
+norm_parameter_ex1 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\plotting_parameters_ex1.joblib'
+
+model_file_ex2 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\model_full_prediction_ex2.keras'
+norm_parameter_ex2 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\plotting_parameters_ex2.joblib'
+
+model_file_ex3 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\model_full_prediction_ex3.keras'
+norm_parameter_ex3 = 'C:\\Users\\leapuser\\PycharmProjects\\leap_project\\Final_Model\\plotting_parameters_ex3.joblib'
+
+
+if 'page' not in st.session_state:
+    st.session_state.page = 'home'
+
+if st.session_state.page == 'home':
+    st.title('3-D HAND POSE RECONSTRUCTION')
+    st.header('Details')
+    name = st.text_input('Name:')
+    direc = os.path.join(output_path, name)
+    os.makedirs(direc, exist_ok=True)
+    st.header('File Upload :file_folder:')
+
+    audio_upload_file = st.file_uploader('Choose the audio file', type=['wav'])
+
+    leap_upload_file = st.file_uploader('Choose the leap file', type=['csv'])
+
+    if audio_upload_file is not None and leap_upload_file is not None :
+        with st.spinner(text='Processing Files...',show_time=False):
+            output_path = os.path.join(direc, leap_upload_file.name)
+            preprocess(audio_upload_file,leap_upload_file,output_path)
+            time.sleep(4)
+        st.success('Done!')
+        st.balloons()
+        go_to_next_page('generate_hand_pose')
+        time.sleep(1)
+        st.button('Generate Hand Pose :fist:')
+
+elif st.session_state.page == 'generate_hand_pose':
+    st.title('3-D HAND POSE RECONSTRUCTION')
+    if st.button('Previous page'):
+        go_to_next_page('home')
+
+    name_c = st.text_input('Confirm Name:')
+    direc = os.path.join(output_path, name_c)
+    exercise = st.text_input('Confirm Exercise:')
+    if exercise == 'ex2':
+        if os.path.isdir(direc):
+            for i in os.listdir(direc):
+                file = os.path.join(direc, i)
+                file = pd.read_csv(file)
+                with st.spinner(text='Generating Plot...', show_time=False):
+                    plot_fig(model_file_ex2, file, norm_parameter_ex2, new_data=True)
+                    time.sleep(1)
+    if exercise == 'ex1':
+        if os.path.isdir(direc):
+            for i in os.listdir(direc):
+                file = os.path.join(direc, i)
+                file = pd.read_csv(file)
+                with st.spinner(text='Generating Plot...', show_time=False):
+                    plot_fig(model_file_ex1, file, norm_parameter_ex1, new_data=True)
+                    time.sleep(1)
+
+    if exercise == 'ex3':
+        if os.path.isdir(direc):
+            for i in os.listdir(direc):
+                file = os.path.join(direc, i)
+                file = pd.read_csv(file)
+                with st.spinner(text='Generating Plot...', show_time=False):
+                    plot_fig(model_file_ex3, file, norm_parameter_ex3, new_data=True)
+                    time.sleep(1)
